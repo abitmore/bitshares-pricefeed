@@ -3,7 +3,7 @@ import click
 import logging
 import yaml
 from math import fabs
-from datetime import datetime
+from datetime import datetime, timezone
 from bitshares.price import Price
 from bitshares.asset import Asset
 from prettytable import PrettyTable
@@ -41,7 +41,7 @@ def highlightLargeDeviation(value, ref, thres=5):
 
 
 def formatPrice(f):
-    return click.style("%.10f" % f, fg="yellow")
+    return click.style("%.6f" % f, fg="yellow")
 
 
 def formatStd(f):
@@ -54,7 +54,7 @@ def print_log(feeds):
         "quote",
         "price",
         "diff",
-        "volume",
+        "quote volume",
         "source"
     ])
     t.align = 'l'
@@ -83,7 +83,7 @@ def print_log(feeds):
 def print_prices(feeds):
     t = PrettyTable([
         "symbol", "collateral",
-        "new price", "cer",
+        "new price", "cer", "premium", "unadjusted price",
         "mean", "median", "wgt. avg.",
         "wgt. std (#)", "blockchain",
         "mssr", "mcr",
@@ -95,20 +95,23 @@ def print_prices(feeds):
     for symbol, feed in feeds.items():
         if not feed:
             continue
+        collateral = feed["short_backing_symbol"]
         myprice = feed["price"]
-        blockchain = float(Price(feed["global_feed"]["settlement_price"]))
+        blockchain = feed["global_feed"]["settlement_price"].as_quote(collateral)['price']
         if "current_feed" in feed and feed["current_feed"]:
-            last = float(feed["current_feed"]["settlement_price"])
-            age = (str(datetime.utcnow() - feed["current_feed"]["date"]))
+            last = feed["current_feed"]["settlement_price"].as_quote(collateral)['price']
+            age = (str(datetime.now(timezone.utc) - feed["current_feed"]["date"]))
         else:
             last = -1.0
             age = "unknown"
         # Get Final Price according to price metric
         t.add_row([
             symbol,
-            ("%s") % (feed["short_backing_symbol"]),
+            ("%s" % collateral),
             ("%s" % formatPrice(feed["price"])),
             ("%s" % formatPrice(feed["cer"])),
+            ("%.1f%%" % feed["premium"]),
+            ("%s (%s)" % (formatPrice(feed["unadjusted_price"]), priceChange(myprice, feed.get("unadjusted_price")))),
             ("%s (%s)" % (formatPrice(feed["mean"]), priceChange(myprice, feed.get("mean")))),
             ("%s (%s)" % (formatPrice(feed["median"]), priceChange(myprice, feed.get("median")))),
             ("%s (%s)" % (formatPrice(feed["weighted"]), priceChange(myprice, feed.get("weighted")))),

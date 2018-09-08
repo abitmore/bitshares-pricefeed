@@ -10,6 +10,9 @@
 #     * Currencylayer (has a a free subscription)
 #     * Quandl (has a a free subscription)
 #     * BitcoinAverage (has a a free subscription)
+#     * Fixer (has a free subscription)
+#     * AlphaVantage (has a free subscription)
+#     * WorldCoinIndex (has a free subscription)
 #     
 # The corresponding variables can be defined in the `exchanges` key.
 
@@ -26,35 +29,10 @@ exchanges:
     ####################################
     # Fiat Exchange Rates
     ####################################
-    google:
-        klass: Google
-        enable: True
-        quotes:
-            - ARS
-            - TRY
-            - SGD
-            - HKD
-            - NZD
-            - CNY
-            - MXN
-            - CAD
-            - CHF
-            - AUD
-            - GBP
-            - JPY
-            - EUR
-            - USD
-            - KRW
-            - RUB
-        bases:
-            - USD
-            - EUR
-            - CNY
-        quoteNames:
-            RUB: RUBLE
     fixer:
         klass: Fixer
-        enable: True
+        api_key: 
+        free_subscription: True
         quotes:
             - EUR
             - USD
@@ -78,11 +56,10 @@ exchanges:
             - CNY
             - JPY
             - HKD
-        quoteNames:
+        aliases:
             RUB: RUBLE
     openexchangerates:
         klass: OpenExchangeRates
-        enable: True
         api_key: 
         free_subscription: True
         quotes:
@@ -103,14 +80,11 @@ exchanges:
             - KRW
             - SEK
             - RUB
-        base:
+        bases:
             # Only USD with free subscription
             - USD
-        quoteNames:
-            RUB: RUBLE
     currencylayer:
         klass: CurrencyLayer
-        enable: True
         api_key: 
         free_subscription: True
         quotes:
@@ -131,10 +105,10 @@ exchanges:
             - KRW
             - RUB
             - SEK
-        base:
+        bases:
             # Only USD with free subscription
             - USD
-        quoteNames:
+        aliases:
             RUB: RUBLE
 
     ####################################
@@ -142,7 +116,6 @@ exchanges:
     ####################################
     quandl:
         klass: Quandl 
-        enable: True
         api_key:
         datasets:
             "GOLD:USD": 
@@ -155,7 +128,6 @@ exchanges:
     ####################################
     bitstamp:
         klass: Bitstamp
-        enable: True
         quotes:
             - BTC
         bases:
@@ -165,27 +137,17 @@ exchanges:
         klass: BitcoinAverage
         secret_key:
         public_key:
-        enable: True
         quotes:
             - BTC
         bases:
             - USD
             - EUR
             - CNY
-    btcchina:
-        klass: BtcChina
-        enable: False
-        quotes:
-            - BTC
-        bases:
-            - USD
     okcoin:
         klass: Okcoin
-        enable: True
         quotes:
             - BTC
         bases:
-            - CNY
             - USD
     huobi:
         klass: Huobi 
@@ -199,29 +161,25 @@ exchanges:
     ####################################
     poloniex:
         klass: Poloniex
-        enable: True
         quotes:
             - BTS
         bases:
             - BTC
     bittrex:
         klass: Bittrex
-        enable: True
+        enable: False
         quotes:
             - BTS
         bases:
             - BTC
     zb:
         klass: Zb
-        enable: True
         quotes:
             - BTS
         bases:
             - BTC
     bitshares:
         klass: Graphene
-        enable: True
-        url: wss://bitshares.openledger.info/ws
         quotes:
             - USD
             - CNY
@@ -229,7 +187,6 @@ exchanges:
             - BTS
     coinmarketcap:
         klass: Coinmarketcap
-        enable: True
         quotes:
             - BTC
             - BTS
@@ -238,14 +195,12 @@ exchanges:
             - USD
     aex:
         klass: Aex
-        enable: True
         quotes:
             - BTS
         bases:
             - BTC
     lbank:
         klass: Lbank
-        enable: True
         quotes:
             - BTS
         bases:
@@ -254,37 +209,6 @@ exchanges:
         
 # default settings
 default:
-
-    # Type: extern, formula, alias
-    type: extern
-
-    # reference is only required if type==formula
-    # if extern: formula may contain 
-    #    *  {USD[weighted]}
-    #    *  {USD[median]}
-    #    *  {USD[mean]}   or other assets than USD
-    #    with values derived from external exchanges
-    #
-    # reference: extern
-
-    # if formula: settlement price can be taken from chain
-    #    accessible values are:
-    #    * {core_exchange_rate}
-    #    * {quoteSettlement_price}
-    #    * {latest}
-    #    while the asset needs to be defined with ref_asset
-    #
-    # ref_asset: USD
-    # formula: 100 * {quoteSettlement_price}
-    #
-    # if alias: Alias allows to change the name of the asset wrt to
-    #    external sources. E.g.:
-    #       SMART.USD:
-    #           type: alias
-    #           alias: USD
-    #
-    # alias: USD
-
     # max age of a feed
     maxage: 43200
 
@@ -296,6 +220,9 @@ default:
 
     # skip publishing a feed if price goes above this percentage
     skip_change: 3
+
+    # skip publishing a feed if producer is not an active witness.
+    skip_inactive_witness: True
 
     # how to derive a single price from several sources
     # Choose from: "median", "mean", or "weighted" (by volume)
@@ -309,17 +236,14 @@ default:
     # Choose from: - "*": all,
     #              - loaded exchanges (see below)
     sources:
-        - google
         - fixer
         - openexchangerates
         - currencylayer
         - btcavg
         - quandl
         - bitstamp
-        - btcavg
         - okcoin
         - poloniex
-        - bittrex
         - zb
         - coinmarketcap
         - aex
@@ -348,6 +272,7 @@ assets:
     BTC:
     USD:
     CNY:
+        core_exchange_factor: 1.2
     TRY:
     RUBLE:
     EUR:

@@ -33,14 +33,9 @@ log = logging.getLogger(__name__)
     # type=click.File('r'),
 )
 @click.option(
-    "--confirm-warning/--no-confirm-warning",
-    help="Need for manual confirmation of warnings",
-    default=True,
-)
-@click.option(
-    "--skip-critical/--no-skip-critical",
-    help="Skip critical feeds",
-    default=False,
+    "--node",
+    metavar='<wss://host:port>',
+    help="Node to connect to",
 )
 @click.pass_context
 def main(ctx, **kwargs):
@@ -116,17 +111,54 @@ def create(ctx, example):
     click.echo("Config file created: %s" % config_file)
 
 
+
+def configure_dry_run(ctx, param, value):
+    if value:
+        ctx.obj['unsigned'] = True
+    return value
+
+def configure_active_key(ctx, param, value):
+    if value:
+        ctx.obj['keys'] = { 'active': value }
+        ctx.obj['unsigned'] = True
+
 @main.command()
-@click.argument(
-    "assets",
-    nargs=-1,
-    required=False,
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Only compute prices and print result, no publication.",
+    default=False,
+    callback=configure_dry_run,
+    is_eager=True
+)
+@click.option(
+    "--active-key",
+    metavar='WIF',
+    help="Active key to be used to sign transactions.",
+    callback=configure_active_key,
+    expose_value=False, 
+    is_eager=True
+)
+@click.option(
+    "--confirm-warning/--no-confirm-warning",
+    help="Need for manual confirmation of warnings",
+    default=True,
+)
+@click.option(
+    "--skip-critical/--no-skip-critical",
+    help="Skip critical feeds",
+    default=False,
 )
 @click.pass_context
 @configfile
 @chain
 @unlock
-def update(ctx, assets):
+@click.argument(
+    "assets",
+    nargs=-1,
+    required=False,
+)
+def update(ctx, assets, dry_run, confirm_warning, skip_critical):
     """ Update price feed for assets
     """
     exitcode = 0
@@ -142,6 +174,14 @@ def update(ctx, assets):
     print_log(prices)
     print_prices(prices)
 
+    if dry_run:
+        return
+
+    # Bundle all operation in one transaction.
+    ctx.bitshares.bundle = True
+    # Assert that we sign the transactions.
+    ctx.bitshares.unsigned = False
+
     for symbol, price in prices.items():
         # Skip empy symbols
         if not price:
@@ -149,13 +189,21 @@ def update(ctx, assets):
 
         flags = price["flags"]
 
+        if "skip_inactive_witness" in flags:
+            alert("Witness is inactive, skipping {}.".format(symbol))
+            continue
+
         # Prices that don't move sufficiently, or are not too old, can
         # be skipped right away
         if "min_change" not in flags and "over_max_age" not in flags:
+            print('Price of %s did not moved sufficiently (%.2f%%). Skipping!' % (symbol, price['priceChange']))
             continue
 
+        if "min_change" not in flags and "over_max_age" in flags:
+            print('Price of %s is tool old, forcing republication.' % (symbol, ))
+
         if (
-            ctx.obj["confirm_warning"] and
+            confirm_warning and
             "over_warn_change" in flags and
             "skip_change" not in flags
         ):
@@ -168,7 +216,7 @@ def update(ctx, assets):
                 continue
 
         if "skip_change" in flags:
-            if ctx.obj["skip_critical"]:
+            if skip_critical:
                 alert(
                     "Price change for %s (%f) has been above 'skip_change'.  Skipping!" % (
                         symbol,
@@ -206,10 +254,11 @@ def update(ctx, assets):
             account=ctx.config["producer"]
         )
 
+    ctx.bitshares.txbuffer.constructTx()
+    pprint(ctx.bitshares.txbuffer.json())
+
     # Always ask for confirmation if this flag is set to true
     if "confirm" in ctx.config and ctx.config["confirm"]:
-        ctx.bitshares.txbuffer.constructTx()
-        pprint(ctx.bitshares.txbuffer.json())
         if not confirmwarning(
             "Please confirm"
         ):

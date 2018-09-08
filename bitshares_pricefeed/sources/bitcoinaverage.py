@@ -1,33 +1,23 @@
-from . import FeedSource
-from bitcoinaverage import RestfulClient
-
+import requests
+from . import FeedSource, _request_headers
 
 class BitcoinAverage(FeedSource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert hasattr(self, "secret_key"), "Bitcoinaverage needs 'secret_key'"
-        assert hasattr(self, "public_key"), "Bitcoinaverage needs 'public_key'"
-        self.rest = RestfulClient(self.secret_key, self.public_key)
+        self.symbol_set = getattr(self, "symbol_set", 'local')
+        valid_symbol_sets = ['global', 'local', 'crypto', 'tokens']
+        assert self.symbol_set in valid_symbol_sets, "BitcoinAverage needs 'symbol_set' to be one of {}".format(valid_symbol_sets)
 
     def _fetch(self):
         feed = {}
-        try:
-            for base in self.bases:
-                feed[base] = {}
-                for quote in self.quotes:
-                    if quote == base:
-                        continue
-                    result = self.rest.ticker_global_per_symbol(
-                        quote.upper() + base.upper()
-                    )
-                    if (
-                        hasattr(self, "quoteNames") and
-                        quote in self.quoteNames
-                    ):
-                        quote = self.quoteNames[quote]
-                    feed[base][quote] = {
-                        "price": (float(result["last"])),
-                        "volume": (float(result["volume"]))}
-        except Exception as e:
-            raise Exception("\nError fetching results from {1}! ({0})".format(str(e), type(self).__name__))
+        url = "https://apiv2.bitcoinaverage.com/indices/{}/ticker/{}{}"
+        for base in self.bases:
+            for quote in self.quotes:
+                if quote == base:
+                    continue
+                endpoint = url.format(self.symbol_set, quote, base)
+                response = requests.get(url=endpoint, headers=_request_headers, timeout=self.timeout)
+                if response.status_code == 200:
+                    result = response.json()
+                    self.add_rate(feed, base, quote, result["last"], result["volume"] * result['last'])
         return feed
